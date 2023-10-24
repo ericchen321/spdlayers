@@ -16,9 +16,9 @@ with open("spdlayers/version.py") as fp:
 setup(
     name="spdlayers",
     version=version["__version__"],
-    author="Charles Jekel",
-    author_email="jekel1@llnl.gov",
-    url='https://github.com/LLNL/spdlayers',
+    author="Guanxiong Chen, Charles Jekel",
+    author_email="gxchen@cs.ubc.ca, jekel1@llnl.gov",
+    url='https://github.com/ericchen321/spdlayers',
     packages=['spdlayers'],
     description=short,
     license='MIT License',

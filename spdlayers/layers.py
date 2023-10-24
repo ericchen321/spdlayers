@@ -31,20 +31,21 @@ def _positive_function(positive):
         raise ValueError(error)
 
 
-def _anisotropic_indices(output_shape):
+def _anisotropic_indices(output_shape, device="cpu"):
     """
     Returns anisotropic indices to transform vector to matrix
     """
-    inds_a, inds_b = torch.tril_indices(output_shape, output_shape)
+    inds_a, inds_b = torch.tril_indices(
+        output_shape, output_shape, device=device)
     return inds_a, inds_b
 
 
-def _orthotropic_indices():
+def _orthotropic_indices(device="cpu"):
     """
     Returns orthotropic indices to transform vector to matrix
     """
-    inds_a = torch.tensor([0, 1, 1, 2, 2, 2, 3, 4, 5])
-    inds_b = torch.tensor([0, 0, 1, 0, 1, 2, 3, 4, 5])
+    inds_a = torch.tensor([0, 1, 1, 2, 2, 2, 3, 4, 5], device=device)
+    inds_b = torch.tensor([0, 0, 1, 0, 1, 2, 3, 4, 5], device=device)
     return inds_a, inds_b
 
 
@@ -54,7 +55,7 @@ class Cholesky(nn.Module):
     """
 
     def __init__(self, output_shape=6, symmetry='anisotropic',
-                 positive='None', min_value=1e-8):
+                 positive='None', min_value=1e-8, device="cpu"):
         """
         Initialize Cholesky SPD layer
 
@@ -73,12 +74,15 @@ class Cholesky(nn.Module):
                 'ReLU6', '4', 'Exp', and 'None' (default).
             min_value (float): The minimum allowable value for a diagonal
                 component. Default is 1e-8.
+            device: The device to use for the layer
         """
         super(Cholesky, self).__init__()
+        self.device = device
         if symmetry == 'anisotropic':
-            self.inds_a, self.inds_b = _anisotropic_indices(output_shape)
+            self.inds_a, self.inds_b = _anisotropic_indices(
+                output_shape, device=self.device)
         elif symmetry == 'orthotropic':
-            self.inds_a, self.inds_b = _orthotropic_indices()
+            self.inds_a, self.inds_b = _orthotropic_indices(device=self.device)
             if output_shape != 6:
                 e = f"symmetry={symmetry} can only be used with output_shape=6"
                 raise ValueError(e)
@@ -89,7 +93,7 @@ class Cholesky(nn.Module):
 
         self.positive = positive
         self.positive_fun = _positive_function(positive)
-        self.min_value = torch.tensor(min_value)
+        self.min_value = torch.tensor(min_value, device=self.device)
         self.register_buffer('_min_value', self.min_value)
 
     def forward(self, x):
@@ -111,7 +115,7 @@ class Cholesky(nn.Module):
         x = torch.where(self.is_diag, self.positive_fun(x) + self.min_value, x)
         # init a Zero lower triangle tensor
         L = torch.zeros((x.shape[0], self.output_shape, self.output_shape),
-                        dtype=x.dtype)
+                        dtype=x.dtype, device=self.device)
         # populate the lower triangle tensor
         L[:, self.inds_a, self.inds_b] = x
         LT = L.transpose(1, 2)  # lower triangle transpose
@@ -125,7 +129,7 @@ class Eigen(nn.Module):
     """
 
     def __init__(self, output_shape=6, symmetry='anisotropic',
-                 positive='Square', min_value=1e-8, n_zero_eigvals=0):
+                 positive='Square', min_value=1e-8, n_zero_eigvals=0, device="cpu"):
         """
         Initialize Eigendecomposition SPD layer
 
@@ -150,12 +154,15 @@ class Eigen(nn.Module):
                 outputs will be symmetric semi-definite. Note that min_value
                 does not affect the zero'd eigenvalues, which will be exactly
                 0.0.
+            device: The device to use for the layer
         """
         super(Eigen, self).__init__()
+        self.device = device
         if symmetry == 'anisotropic':
-            self.inds_a, self.inds_b = _anisotropic_indices(output_shape)
+            self.inds_a, self.inds_b = _anisotropic_indices(
+                output_shape, device=self.device)
         elif symmetry == 'orthotropic':
-            self.inds_a, self.inds_b = _orthotropic_indices()
+            self.inds_a, self.inds_b = _orthotropic_indices(device=self.device)
             if output_shape != 6:
                 e = f"symmetry={symmetry} can only be used with output_shape=6"
                 raise ValueError(e)
@@ -172,7 +179,7 @@ class Eigen(nn.Module):
         self.output_shape = output_shape
         self.positive = positive
         self.positive_fun = _positive_function(positive)
-        self.min_value = torch.tensor(min_value)
+        self.min_value = torch.tensor(min_value, device=self.device)
         self.register_buffer('_min_value', self.min_value)
 
     def forward(self, x):
@@ -193,7 +200,7 @@ class Eigen(nn.Module):
         x = torch.nan_to_num(x)  # we can't run torch.linalg.eig with NaNs!
         # init a placeholder tensor
         out = torch.zeros((x.shape[0], self.output_shape, self.output_shape),
-                          dtype=x.dtype)
+                          dtype=x.dtype, device=self.device)
         out[:, self.inds_a, self.inds_b] = x
         out[:, self.inds_b, self.inds_a] = x
 
@@ -201,7 +208,7 @@ class Eigen(nn.Module):
         D, U = torch.linalg.eigh(out)
         D = self.positive_fun(D) + self.min_value
         if self.zero_eigvals:
-            zeros_and_ones = torch.ones_like(D)
+            zeros_and_ones = torch.ones_like(D, device=self.device)
             # set the columns to zero
             zeros_and_ones[:, :self.n_zero_eigvals] = 0.0
             # zero out the smallest eigenvalues

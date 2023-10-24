@@ -22,18 +22,18 @@ class TestSPD(unittest.TestCase):
         self.assertIsInstance(in_shape, int)
 
     def test_Eigen_anisotropic(self):
-        x = torch.rand(batch_size, 21).double()
+        x = torch.rand(batch_size, 21).double().cuda()
         for pos in positive_funs:
-            myEigen = Eigen(output_shape=6, positive=pos).double()
+            myEigen = Eigen(output_shape=6, positive=pos, device="cuda").double()
             out = myEigen(x)
             u = torch.real(torch.linalg.eigvals(out))
             min_eig_val = torch.min(u).item()
             self.assertTrue(min_eig_val > 0.0)
 
     def test_Cholesky_anisotropic(self):
-        x = torch.rand(batch_size, 21).double()
+        x = torch.rand(batch_size, 21).double().cuda()
         for pos in positive_funs_chol:
-            myCholesky = Cholesky(output_shape=6, positive=pos).double()
+            myCholesky = Cholesky(output_shape=6, positive=pos, device="cuda").double()
             out = myCholesky(x)
             u = torch.real(torch.linalg.eigvals(out))
             min_eig_val = torch.min(u).item()
@@ -42,22 +42,24 @@ class TestSPD(unittest.TestCase):
             self.assertTrue(min_eig_val >= 0.0)
 
     def test_Eigen_orthotropic(self):
-        x = torch.rand(batch_size, 9).double()
+        x = torch.rand(batch_size, 9).double().cuda()
         for pos in positive_funs:
             myEigen = Eigen(output_shape=6,
                             symmetry='orthotropic',
-                            positive=pos).double()
+                            positive=pos,
+                            device="cuda").double()
             out = myEigen(x)
             u = torch.real(torch.linalg.eigvals(out))
             min_eig_val = torch.min(u).item()
             self.assertTrue(min_eig_val > 0.0)
 
     def test_Cholesky_orthotropic(self):
-        x = torch.rand(batch_size, 9).double()
+        x = torch.rand(batch_size, 9).double().cuda()
         for pos in positive_funs:
             myCholesky = Cholesky(output_shape=6,
                                   symmetry='orthotropic',
-                                  positive=pos).double()
+                                  positive=pos,
+                                  device="cuda").double()
             out = myCholesky(x)
             u = torch.real(torch.linalg.eigvals(out))
             min_eig_val = torch.min(u).item()
@@ -67,39 +69,39 @@ class TestSPD(unittest.TestCase):
 
     def test_value_errors_eig(self):
         try:
-            _ = Eigen(symmetry='bob')
+            _ = Eigen(symmetry='bob', device="cuda")
             self.assertTrue(False)
         except ValueError:
             self.assertTrue(True)
         try:
-            _ = Eigen(output_shape=7, symmetry='orthotropic')
+            _ = Eigen(output_shape=7, symmetry='orthotropic', device="cuda")
             self.assertTrue(False)
         except ValueError:
             self.assertTrue(True)
         try:
-            _ = Eigen(positive='hello')
+            _ = Eigen(positive='hello', device="cuda")
             self.assertTrue(False)
         except ValueError:
             self.assertTrue(True)
         try:
-            _ = Eigen(n_zero_eigvals=100)
+            _ = Eigen(n_zero_eigvals=100, device="cuda")
             self.assertTrue(False)
         except ValueError:
             self.assertTrue(True)
 
     def test_value_errors_chol(self):
         try:
-            _ = Cholesky(symmetry='bob')
+            _ = Cholesky(symmetry='bob', device="cuda")
             self.assertTrue(False)
         except ValueError:
             self.assertTrue(True)
         try:
-            _ = Cholesky(output_shape=7, symmetry='orthotropic')
+            _ = Cholesky(output_shape=7, symmetry='orthotropic', device="cuda")
             self.assertTrue(False)
         except ValueError:
             self.assertTrue(True)
         try:
-            _ = Cholesky(positive='hello')
+            _ = Cholesky(positive='hello', device="cuda")
             self.assertTrue(False)
         except ValueError:
             self.assertTrue(True)
@@ -113,9 +115,9 @@ class TestSPD(unittest.TestCase):
         model = nn.Sequential(
             nn.Linear(n_features, hidden_size),
             nn.Linear(hidden_size, in_shape),
-            Cholesky(output_shape=out_shape)
-        )
-        x = torch.rand((10, n_features))
+            Cholesky(output_shape=out_shape, device="cuda")
+        ).to("cuda")
+        x = torch.rand((10, n_features), device="cuda")
         model(x)
 
     def test_example_two(self):
@@ -127,9 +129,9 @@ class TestSPD(unittest.TestCase):
         model = nn.Sequential(
             nn.Linear(n_features, hidden_size),
             nn.Linear(hidden_size, in_shape),
-            Eigen(output_shape=out_shape)
-        )
-        x = torch.rand((10, n_features))
+            Eigen(output_shape=out_shape, device="cuda")
+        ).to("cuda")
+        x = torch.rand((10, n_features), device="cuda")
         model(x)
 
     def test_different_output(self):
@@ -141,9 +143,9 @@ class TestSPD(unittest.TestCase):
         model = nn.Sequential(
             nn.Linear(n_features, hidden_size),
             nn.Linear(hidden_size, in_shape),
-            Eigen(output_shape=out_shape)
-        )
-        x = torch.rand((10, n_features))
+            Eigen(output_shape=out_shape, device="cuda")
+        ).to("cuda")
+        x = torch.rand((10, n_features), device="cuda")
         model(x)
 
     def test_training_eig_n_zero(self):
@@ -153,8 +155,8 @@ class TestSPD(unittest.TestCase):
         hidden_size = 10
         out_shape = 3
         n_features = 2
-        X = torch.rand(n_data, n_features)
-        Y = torch.zeros(n_data, out_shape, out_shape)
+        X = torch.rand(n_data, n_features, device="cuda")
+        Y = torch.zeros(n_data, out_shape, out_shape, device="cuda")
         Y[:, 0, 0] = 2.0*X[:, 0]
         Y[:, 1, 0] = -2.0*X[:, 1]
         Y[:, 1, 1] = 2.0*X[:, 0]*X[:, 1]
@@ -174,8 +176,9 @@ class TestSPD(unittest.TestCase):
                       symmetry='anisotropic',
                       positive='Abs',
                       n_zero_eigvals=1,
-                      min_value=0.0)
-                )
+                      min_value=0.0,
+                      device="cuda")
+                ).to("cuda")
         model = model.double()
         loss_fn = nn.MSELoss()
         loss0 = loss_fn(model(X), Y)
